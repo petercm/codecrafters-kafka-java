@@ -1,3 +1,4 @@
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -21,10 +22,32 @@ public class Main {
             serverSocket.setReuseAddress(true);
             // Wait for connection from client.
             clientSocket = serverSocket.accept();
+            DataInputStream dis = new DataInputStream(clientSocket.getInputStream());
+
+            /*
+            Request Header v2 => request_api_key request_api_version correlation_id client_id TAG_BUFFER
+              request_api_key => INT16
+              request_api_version => INT16
+              correlation_id => INT32
+              client_id => NULLABLE_STRING - For non-null strings, first the length N is given as an INT16.
+                Then N bytes follow which are the UTF-8 encoding of the character sequence. A null value is
+                encoded with length of -1
+
+            */
+            int messageSize = dis.readInt();
+            short apiKey = dis.readShort();
+            short apiVersion = dis.readShort();
+            int correlationId = dis.readInt();
+            short clientIdLength = dis.readShort();
+            String clientId = null;
+            if (clientIdLength >= 0) {
+                clientId = new String(dis.readNBytes(clientIdLength));
+            }
+
             OutputStream out = clientSocket.getOutputStream();
             DataOutputStream dos = new DataOutputStream(out);
             dos.writeInt(0); // message_size
-            dos.writeInt(7); // correlation_id
+            dos.writeInt(correlationId); // correlation_id
             dos.flush();
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
