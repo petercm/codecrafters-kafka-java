@@ -36,18 +36,38 @@ public class Main {
             */
             int messageSize = dis.readInt();
             short apiKey = dis.readShort();
-            short apiVersion = dis.readShort();
+            short requestApiVersion = dis.readShort();
             int correlationId = dis.readInt();
             short clientIdLength = dis.readShort();
             String clientId = null;
             if (clientIdLength >= 0) {
                 clientId = new String(dis.readNBytes(clientIdLength));
             }
-
             OutputStream out = clientSocket.getOutputStream();
             DataOutputStream dos = new DataOutputStream(out);
+            short errorCode = 0;
+
+            switch (apiKey) {
+                case 18: // ApiVersions
+                    System.out.println("asdf");
+                    if (requestApiVersion >=0 && requestApiVersion <= 4) {
+                        /* ApiVersions Response (Version: 4) => error_code [api_keys] throttle_time_ms TAG_BUFFER
+                          error_code => INT16
+                          api_keys => api_key min_version max_version TAG_BUFFER
+                            api_key => INT16
+                            min_version => INT16
+                            max_version => INT16
+                          throttle_time_ms => INT32
+                          */
+                    }
+                default:
+                    //unsupported
+                    errorCode = ApiErrors.UNSUPPORTED_VERSION.getErrorCode();
+            }
+
             dos.writeInt(0); // message_size
             dos.writeInt(correlationId); // correlation_id
+            dos.writeShort(errorCode);
             dos.flush();
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
