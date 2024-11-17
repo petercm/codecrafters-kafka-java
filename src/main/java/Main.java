@@ -1,20 +1,15 @@
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.ByteBuffer;
 
 public class Main {
     public static void main(String[] args){
-        // You can use print statements as follows for debugging, they'll be visible when running tests.
-        System.err.println("Logs from your program will appear here!");
-
-        // Uncomment this block to pass the first stage
-        //
+        int port = 9092;
+        System.err.println("Server starting on port" + port);
         ServerSocket serverSocket = null;
         Socket clientSocket = null;
-        int port = 9092;
+
         try {
             serverSocket = new ServerSocket(port);
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
@@ -44,13 +39,16 @@ public class Main {
                 clientId = new String(dis.readNBytes(clientIdLength));
             }
             OutputStream out = clientSocket.getOutputStream();
-            DataOutputStream dos = new DataOutputStream(out);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            DataOutputStream dos = new DataOutputStream(bos);
+            dos.writeInt(correlationId); // correlation_id
+
             short errorCode = 0;
 
             switch (apiKey) {
                 case 18: // ApiVersions
-                    System.out.println("asdf");
-                    if (requestApiVersion >=0 && requestApiVersion <= 4) {
+                    System.out.println("Received ApiVersions request " + requestApiVersion);
+                    if (requestApiVersion >= 0 && requestApiVersion <= 4) {
                         /* ApiVersions Response (Version: 4) => error_code [api_keys] throttle_time_ms TAG_BUFFER
                           error_code => INT16
                           api_keys => api_key min_version max_version TAG_BUFFER
@@ -59,16 +57,26 @@ public class Main {
                             max_version => INT16
                           throttle_time_ms => INT32
                           */
+                        dos.writeShort(0);
+                        dos.writeByte(2); // length+1 of the api_keys COMPACT_ARRAY
+                        dos.writeShort(18); // api_key
+                        dos.writeShort(0); // min_version
+                        dos.writeShort(4); // max_version
+                        dos.writeByte(0); // TAG_BUFFER
+                        dos.writeInt(0); // throttle_time_ms
+                        dos.writeByte(0); // TAG_BUFFER
+                    } else {
+                        errorCode = ApiErrors.UNSUPPORTED_VERSION.getErrorCode();
+                        dos.writeShort(errorCode);
                     }
+                    break;
                 default:
                     //unsupported
-                    errorCode = ApiErrors.UNSUPPORTED_VERSION.getErrorCode();
-            }
 
-            dos.writeInt(0); // message_size
-            dos.writeInt(correlationId); // correlation_id
-            dos.writeShort(errorCode);
+            }
             dos.flush();
+            out.write(ByteBuffer.allocate(4).putInt(bos.size()).array()); // message_size
+            out.write(bos.toByteArray());
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         } finally {
